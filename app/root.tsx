@@ -1,5 +1,4 @@
-import { json, LinksFunction } from "@remix-run/node";
-import { type MetaFunction } from "@remix-run/node";
+import { json, type LinksFunction, type MetaFunction } from "@remix-run/node";
 import {
   Links,
   LiveReload,
@@ -15,6 +14,9 @@ import Grid from "./components/Grid";
 import Page from "./components/Page";
 import Teaser from "./components/Teaser";
 import styles from "./styles/tailwind.css";
+import Layout from "./components/Layout";
+import { invariantResponse } from "./utils";
+import { GeneralErrorBoundary } from "./components/GeneralErrorBoundary";
 
 export const links: LinksFunction = () => [{ rel: "stylesheet", href: styles }];
 
@@ -26,6 +28,13 @@ const accessToken = isServer
     window.env.STORYBLOK_PREVIEW_TOKEN;
 
 export async function loader() {
+  invariantResponse(
+    accessToken,
+    "You need to provide an access token to interact with Storyblok API.",
+    {
+      status: 401,
+    }
+  );
   return json({ env: process.env.STORYBLOK_PREVIEW_TOKEN });
 }
 
@@ -48,25 +57,57 @@ export const meta: MetaFunction = () => [
   { name: "title", content: "New Remix App" },
 ];
 
-export default function App() {
-  const { env } = useLoaderData<typeof loader>();
+const Document = ({ children }) => {
   return (
     <html lang="en">
       <head>
         <Meta />
         <Links />
       </head>
+
       <body>
-        <Outlet />
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `window.env = ${JSON.stringify(env)}`,
-          }}
-        />
+        <Layout>{children}</Layout>
         <ScrollRestoration />
         <Scripts />
         <LiveReload />
       </body>
     </html>
+  );
+};
+
+export default function App() {
+  const { env } = useLoaderData<typeof loader>();
+  return (
+    <Document>
+      <Outlet />
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `window.env = ${JSON.stringify(env)}`,
+        }}
+      />
+    </Document>
+  );
+}
+export function getErrorMessage(error: unknown) {
+  if (typeof error === "string") return error;
+  if (
+    error &&
+    typeof error === "object" &&
+    "message" in error &&
+    typeof error.message === "string"
+  ) {
+    return error.message;
+  }
+  console.error("Unable to get error message for error", error);
+  return "Unknown Error";
+}
+
+export function ErrorBoundary() {
+  return (
+    <Document>
+      <div className="flex-1">
+        <GeneralErrorBoundary />
+      </div>
+    </Document>
   );
 }
